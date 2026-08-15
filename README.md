@@ -2,6 +2,8 @@
 
 An end to end machine learning system that predicts hourly taxi pickup demand for every New York City taxi zone. It transforms official trip records into operational forecasts, uncertainty estimates, an inference API, a monitoring report, and an interactive dashboard.
 
+<p><strong><a href="https://urban&#45;mobility&#45;demand&#45;forecasting&#45;xhzfr7pczc7u9jkmvgphri.streamlit.app/">Open the live dashboard</a></strong></p>
+
 ## Why this project exists
 
 Urban mobility platforms must position limited supply before demand appears. This project answers a practical question: how many pickups should an operations team expect in each zone over the next one, six, and twenty four hours?
