@@ -17,3 +17,5 @@ def test_forecast_simulator_runs_default_scenario():
     assert float(result_metrics["Expected pickups"]) >= 0
     assert "Target time" in result_metrics
     assert "Versus recent average" in result_metrics
+    assert float(result_metrics["Previous hour"]) >= 0
+    assert float(result_metrics["Same hour last week"]) >= 0

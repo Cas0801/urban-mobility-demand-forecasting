@@ -7,6 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from src.api import ForecastRequest, predict_request
+from src.history import historical_features
 
 
 st.set_page_config(page_title="Urban Mobility Demand Forecasting", layout="wide")
@@ -17,6 +18,7 @@ metrics_path = Path("artifacts/metrics.csv")
 predictions_path = Path("artifacts/prediction_sample.csv")
 probability_path = Path("artifacts/probabilistic_metrics.json")
 interval_path = Path("artifacts/interval_sample.csv")
+history_path = Path("data/processed/hourly_zone_demand.parquet")
 if not metrics_path.exists() or not predictions_path.exists():
     st.error("Run the preparation and training pipeline before opening the dashboard.")
     st.stop()
@@ -24,6 +26,7 @@ if not metrics_path.exists() or not predictions_path.exists():
 metrics = pd.read_csv(metrics_path)
 predictions = pd.read_csv(predictions_path, parse_dates=["target_timestamp"])
 probability = json.loads(probability_path.read_text()) if probability_path.exists() else None
+hourly_history = pd.read_parquet(history_path) if history_path.exists() else None
 test_metrics = metrics[metrics.split.eq("test")].copy()
 one_hour = test_metrics[test_metrics.horizon_hours.eq(1)].set_index("model")
 improvement = 1 - one_hour.loc["lightgbm", "rmse"] / one_hour.loc["same_hour_last_week", "rmse"]
@@ -37,7 +40,14 @@ four.metric("RMSE improvement", f"{improvement:.1%}", help="Compared with the sa
 st.subheader("Interactive demand forecast")
 st.write(
     "Configure an operating scenario and run the trained model directly. "
-    "Historical demand inputs represent the information available when the forecast is created."
+    "Demand features are loaded automatically from the deployed TLC history snapshot."
+)
+
+history_mode = st.radio(
+    "Demand input mode",
+    ["Automatic from TLC history", "Custom scenario"],
+    horizontal=True,
+    help="Automatic mode reproduces a historical forecast. Custom mode supports what if analysis.",
 )
 
 with st.form("forecast_simulator"):
@@ -49,16 +59,34 @@ with st.form("forecast_simulator"):
         setup_three.time_input("Forecast origin time", value=datetime.strptime("18:00", "%H:%M").time()),
     )
 
-    st.caption("Recent observed pickups in the selected zone")
-    history_one, history_two, history_three, history_four, history_five = st.columns(5)
-    lag_one = history_one.number_input("Previous hour", min_value=0.0, value=120.0, step=1.0)
-    lag_twenty_four = history_two.number_input("Same hour yesterday", min_value=0.0, value=110.0, step=1.0)
-    lag_week = history_three.number_input("Same hour last week", min_value=0.0, value=105.0, step=1.0)
-    mean_day = history_four.number_input("Average over 24 hours", min_value=0.0, value=100.0, step=1.0)
-    mean_week = history_five.number_input("Average over 7 days", min_value=0.0, value=95.0, step=1.0)
+    if history_mode == "Custom scenario":
+        st.caption("Recent observed pickups in the selected zone")
+        history_one, history_two, history_three, history_four, history_five = st.columns(5)
+        lag_one = history_one.number_input("Previous hour", min_value=0.0, value=120.0, step=1.0)
+        lag_twenty_four = history_two.number_input("Same hour yesterday", min_value=0.0, value=110.0, step=1.0)
+        lag_week = history_three.number_input("Same hour last week", min_value=0.0, value=105.0, step=1.0)
+        mean_day = history_four.number_input("Average over 24 hours", min_value=0.0, value=100.0, step=1.0)
+        mean_week = history_five.number_input("Average over 7 days", min_value=0.0, value=95.0, step=1.0)
+    else:
+        st.caption("The five historical demand features will be calculated when the forecast runs.")
     submitted = st.form_submit_button("Generate forecast", type="primary", width="stretch")
 
 if submitted:
+    if history_mode == "Automatic from TLC history":
+        if hourly_history is None:
+            st.error("The deployed history snapshot is unavailable. Select Custom scenario to continue.")
+            st.stop()
+        try:
+            features = historical_features(hourly_history, int(zone_input), forecast_origin)
+        except ValueError as error:
+            st.error(str(error))
+            st.stop()
+        lag_one = features["lag_1"]
+        lag_twenty_four = features["lag_24"]
+        lag_week = features["lag_168"]
+        mean_day = features["rolling_mean_24"]
+        mean_week = features["rolling_mean_168"]
+
     target_time = forecast_origin + timedelta(hours=horizon_input)
     request = ForecastRequest(
         horizon_hours=horizon_input,
@@ -80,6 +108,15 @@ if submitted:
     result_one.metric("Expected pickups", f"{forecast.prediction:.0f}")
     result_two.metric("Target time", target_time.strftime("%a %d %b, %H:%M"))
     result_three.metric("Versus recent average", f"{expected_change:+.1%}")
+
+    if history_mode == "Automatic from TLC history":
+        with st.expander("Historical features used", expanded=True):
+            feature_one, feature_two, feature_three, feature_four, feature_five = st.columns(5)
+            feature_one.metric("Previous hour", f"{lag_one:.0f}")
+            feature_two.metric("Same hour yesterday", f"{lag_twenty_four:.0f}")
+            feature_three.metric("Same hour last week", f"{lag_week:.0f}")
+            feature_four.metric("Average over 24 hours", f"{mean_day:.1f}")
+            feature_five.metric("Average over 7 days", f"{mean_week:.1f}")
 
     if forecast.p10 is not None:
         interval_frame = pd.DataFrame({
