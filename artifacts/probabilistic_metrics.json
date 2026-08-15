@@ -1,0 +1,11 @@
+{
+  "nominal_coverage": 0.8,
+  "empirical_coverage": 0.8108869501999273,
+  "mean_interval_width": 12.179433860448233,
+  "median_metrics": {
+    "rmse": 12.315669448418067,
+    "mae": 3.6643995665351605,
+    "wmape": 0.20310682993308563,
+    "peak_rmse": 36.20543020577185
+  }
+}
