@@ -1,8 +1,11 @@
+from pathlib import Path
+
 from streamlit.testing.v1 import AppTest
 
 
 def test_forecast_simulator_runs_default_scenario():
-    app = AppTest.from_file("app.py", default_timeout=30).run()
+    app_path = Path(__file__).resolve().parents[1] / "app.py"
+    app = AppTest.from_file(app_path, default_timeout=30).run()
 
     assert not app.exception
     assert app.subheader[0].value == "Interactive demand forecast"
