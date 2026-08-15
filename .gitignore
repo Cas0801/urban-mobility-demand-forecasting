@@ -4,5 +4,4 @@ __pycache__/
 *.py[cod]
 data/raw/*.parquet
 data/processed/*.parquet
-artifacts/*.txt
 .DS_Store

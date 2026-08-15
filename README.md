@@ -1,67 +1,125 @@
 # Urban Mobility Demand Forecasting Platform
 
-An industry oriented machine learning project that forecasts hourly taxi pickup demand for each New York City taxi zone. It uses official NYC Taxi and Limousine Commission trip records and evaluates models with chronological splits that reproduce real deployment conditions.
+An end to end machine learning system that predicts hourly taxi pickup demand for every New York City taxi zone. It transforms official trip records into operational forecasts, uncertainty estimates, an inference API, a monitoring report, and an interactive dashboard.
 
-## Business objective
+## Why this project exists
 
-Predict the number of taxi pickups in every zone for future hours so that an operations team can identify demand hotspots, allocate supply, and understand peak period risk.
+Urban mobility platforms must position limited supply before demand appears. This project answers a practical question: how many pickups should an operations team expect in each zone over the next one, six, and twenty four hours?
 
-## First milestone
+The output can support driver positioning, fleet allocation, hotspot detection, and peak period planning.
 
-1. Download official monthly Yellow Taxi Parquet files.
-2. Aggregate individual trips into zone and hour demand.
-3. Build calendar, lag, and rolling demand features without temporal leakage.
-4. Compare same hour last week against a global LightGBM model.
-5. Evaluate overall demand, peak demand, and multiple forecast periods.
+## What the system does
 
-## Verified first benchmark
+1. Downloads official monthly Yellow Taxi records from the NYC Taxi and Limousine Commission.
+2. Validates timestamps and zone identifiers, then creates a complete hourly grid that preserves zero demand periods.
+3. Builds calendar, lag, and rolling features using only information available at prediction time.
+4. Trains global LightGBM models for one, six, and twenty four hour horizons.
+5. Compares every model with the demand observed at the same hour one week earlier.
+6. Produces P10, P50, and P90 forecasts for short term capacity planning.
+7. Serves predictions through FastAPI and presents model performance through Streamlit.
+8. Detects feature distribution changes with Population Stability Index monitoring.
 
-The verified three month run processes 9.55 million trips into 572,208 zone hour observations. LightGBM improves test RMSE at one and six hour horizons, while the weekly baseline is slightly stronger at twenty four hours. An eighty percent probabilistic interval achieves 81.09% empirical coverage. These results are documented in [`RESULTS.md`](RESULTS.md) and visualized in the Streamlit dashboard.
+## System architecture
 
-## Data
-
-The official TLC trip records contain pickup and dropoff timestamps, taxi zone identifiers, passenger counts, distances, fares, and payment information. Raw files are excluded from Git because each month can contain millions of trips.
-
-Source: https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page
-
-## Quick start
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m src.download --year 2024 --months 1 2 3
-python -m src.prepare
-python -m src.train
-streamlit run app.py
+```text
+Official TLC records
+        ↓
+Validation and hourly aggregation
+        ↓
+Leakage safe feature pipeline
+        ↓
+Temporal validation and model training
+        ↓
+Point forecasts and probability intervals
+        ↓
+FastAPI service   Streamlit dashboard   PSI monitoring
 ```
 
-Start the prediction API after training:
+## Verified results
 
-```bash
-uvicorn src.api:app --reload
+The experiment processes 9.55 million trips from January through March 2024 into 572,208 zone and hour observations. The final fourteen days are kept as an untouched test period.
+
+<table>
+<tr><th>Horizon</th><th>Weekly baseline RMSE</th><th>LightGBM RMSE</th><th>Relative change</th><th>Selected approach</th></tr>
+<tr><td>1 hour</td><td>12.82</td><td>11.17</td><td>12.85% better</td><td>LightGBM</td></tr>
+<tr><td>6 hours</td><td>12.82</td><td>12.35</td><td>3.66% better</td><td>LightGBM</td></tr>
+<tr><td>24 hours</td><td>12.82</td><td>12.94</td><td>0.99% worse</td><td>Weekly baseline</td></tr>
+</table>
+
+The eighty percent probability interval reaches 81.09% empirical coverage. The result also shows why model choice should depend on forecast horizon: recent demand signals help short term forecasts, while weekly seasonality remains more reliable at twenty four hours.
+
+Detailed metrics and interpretation are available in [`RESULTS.md`](RESULTS.md).
+
+## Product surfaces
+
+The Streamlit application presents headline metrics, horizon comparisons, calibrated intervals, and zone level error analysis.
+
+The FastAPI service exposes a health endpoint and a forecast endpoint. One hour responses include point and probability forecasts. Six and twenty four hour responses provide point forecasts.
+
+The monitoring job compares recent feature distributions with the training reference profile. PSI below 0.10 is healthy, values from 0.10 through 0.25 trigger a warning, and values above 0.25 trigger an alert.
+
+## Run locally
+
+Create and activate a Python 3.11 environment, then run:
+
+```text
+make install
+make test
+make dashboard
 ```
 
-Interactive API documentation is then available at `http://127.0.0.1:8000/docs`.
+The repository contains the trained model artifacts and evaluation samples required by the dashboard and API. To reproduce the complete experiment from official source data, run:
 
-Run feature drift monitoring against the latest seven days:
-
-```bash
-python -m src.monitor
+```text
+make pipeline
 ```
 
-## Leakage controls
+Start the prediction service with:
 
-All lag and rolling features are shifted before aggregation. Validation and test periods are later than the training period. The test period is never used for feature selection or model tuning.
+```text
+make api
+```
 
-## Planned product layer
+Interactive API documentation is available at `http://127.0.0.1:8000/docs`.
 
-The current product layer includes multi horizon point forecasts, one hour probabilistic forecasts, a FastAPI inference service, PSI feature drift monitoring, and an operations dashboard. Future milestones add weather, holidays, geographic zone maps, experiment tracking, and automated scheduled retraining.
+Run the latest seven day drift check with:
 
-## API contract
+```text
+make monitor
+```
 
-The `POST /forecast` endpoint validates zone, calendar, lag, and rolling demand features. It supports one, six, and twenty four hour point forecasts. The one hour response also returns P10, P50, and P90 predictions. The `GET /health` endpoint reports model availability for every supported horizon.
+## Run with Docker
 
-## Monitoring
+```text
+make container
+```
 
-Training stores a reference distribution for five historical demand features. The monitoring job compares recent data with that reference using Population Stability Index. Values below 0.10 are healthy, values from 0.10 to 0.25 produce a warning, and values above 0.25 produce an alert.
+The included container starts the Streamlit dashboard on port 8501.
+
+## Reliability choices
+
+1. Rolling statistics are shifted before aggregation, preventing the current target from entering its own features.
+2. Validation and test windows occur strictly after training data.
+3. The test period is not used for feature selection or tuning.
+4. Every complex model is evaluated against a strong seasonal baseline.
+5. Automated tests cover zero demand aggregation, leakage controls, temporal ordering, horizon alignment, drift alerts, input validation, and inference.
+6. Continuous integration runs the complete test suite for every change to the main branch.
+
+## Repository guide
+
+<table>
+<tr><th>Path</th><th>Responsibility</th></tr>
+<tr><td><code>src/download.py</code></td><td>Official data acquisition</td></tr>
+<tr><td><code>src/prepare.py</code></td><td>Validation and hourly aggregation</td></tr>
+<tr><td><code>src/features.py</code></td><td>Leakage safe feature generation</td></tr>
+<tr><td><code>src/train.py</code></td><td>Training, evaluation, and artifact creation</td></tr>
+<tr><td><code>src/api.py</code></td><td>Online inference service</td></tr>
+<tr><td><code>src/monitor.py</code></td><td>PSI drift monitoring</td></tr>
+<tr><td><code>app.py</code></td><td>Interactive operations dashboard</td></tr>
+<tr><td><code>tests</code></td><td>Pipeline and API regression tests</td></tr>
+<tr><td><code>artifacts</code></td><td>Models, metrics, samples, and monitoring output</td></tr>
+</table>
+
+## Data source
+
+The project uses public Yellow Taxi trip records published by the NYC Taxi and Limousine Commission. Raw files remain outside version control because each monthly file contains millions of trips. Source details and retrieval instructions are recorded in [`data/SOURCES.md`](data/SOURCES.md).
