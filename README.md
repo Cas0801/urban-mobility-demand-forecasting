@@ -20,6 +20,7 @@ The output can support driver positioning, fleet allocation, hotspot detection, 
 6. Produces P10, P50, and P90 forecasts for short term capacity planning.
 7. Serves predictions through FastAPI and presents model performance through Streamlit.
 8. Detects feature distribution changes with Population Stability Index monitoring.
+9. Lets users configure an operating scenario and generate forecasts directly in the live dashboard.
 
 ## System architecture
 
@@ -54,7 +55,7 @@ Detailed metrics and interpretation are available in [`RESULTS.md`](RESULTS.md).
 
 ## Product surfaces
 
-The Streamlit application presents headline metrics, horizon comparisons, calibrated intervals, and zone level error analysis.
+The Streamlit application presents headline metrics, horizon comparisons, calibrated intervals, and zone level error analysis. Its interactive simulator lets a user select a taxi zone, forecast horizon, target time, and recent demand context. It then returns expected pickups, change from recent demand, and capacity planning scenarios.
 
 The FastAPI service exposes a health endpoint and a forecast endpoint. One hour responses include point and probability forecasts. Six and twenty four hour responses provide point forecasts.
 

@@ -1,9 +1,12 @@
 from pathlib import Path
+from datetime import datetime, timedelta
 import json
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+
+from src.api import ForecastRequest, predict_request
 
 
 st.set_page_config(page_title="Urban Mobility Demand Forecasting", layout="wide")
@@ -30,6 +33,81 @@ one.metric("Raw trips", "9.55M", help="Official trip records across January to M
 two.metric("Zone hour rows", "572,208")
 three.metric("1 hour RMSE", f"{one_hour.loc['lightgbm', 'rmse']:.2f}")
 four.metric("RMSE improvement", f"{improvement:.1%}", help="Compared with the same hour last week")
+
+st.subheader("Interactive demand forecast")
+st.write(
+    "Configure an operating scenario and run the trained model directly. "
+    "Historical demand inputs represent the information available when the forecast is created."
+)
+
+with st.form("forecast_simulator"):
+    setup_one, setup_two, setup_three = st.columns(3)
+    horizon_input = setup_one.selectbox("Forecast horizon", [1, 6, 24], format_func=lambda value: f"Next {value} hour" if value == 1 else f"Next {value} hours")
+    zone_input = setup_two.number_input("NYC taxi zone", min_value=1, max_value=265, value=161, step=1)
+    forecast_origin = datetime.combine(
+        setup_three.date_input("Forecast origin date", value=datetime(2024, 3, 29).date()),
+        setup_three.time_input("Forecast origin time", value=datetime.strptime("18:00", "%H:%M").time()),
+    )
+
+    st.caption("Recent observed pickups in the selected zone")
+    history_one, history_two, history_three, history_four, history_five = st.columns(5)
+    lag_one = history_one.number_input("Previous hour", min_value=0.0, value=120.0, step=1.0)
+    lag_twenty_four = history_two.number_input("Same hour yesterday", min_value=0.0, value=110.0, step=1.0)
+    lag_week = history_three.number_input("Same hour last week", min_value=0.0, value=105.0, step=1.0)
+    mean_day = history_four.number_input("Average over 24 hours", min_value=0.0, value=100.0, step=1.0)
+    mean_week = history_five.number_input("Average over 7 days", min_value=0.0, value=95.0, step=1.0)
+    submitted = st.form_submit_button("Generate forecast", type="primary", width="stretch")
+
+if submitted:
+    target_time = forecast_origin + timedelta(hours=horizon_input)
+    request = ForecastRequest(
+        horizon_hours=horizon_input,
+        zone_id=int(zone_input),
+        target_hour=target_time.hour,
+        target_day_of_week=target_time.weekday(),
+        target_is_weekend=int(target_time.weekday() >= 5),
+        target_month=target_time.month,
+        lag_1=lag_one,
+        lag_24=lag_twenty_four,
+        lag_168=lag_week,
+        rolling_mean_24=mean_day,
+        rolling_mean_168=mean_week,
+    )
+    forecast = predict_request(request)
+    expected_change = forecast.prediction / max(mean_day, 1.0) - 1
+
+    result_one, result_two, result_three = st.columns(3)
+    result_one.metric("Expected pickups", f"{forecast.prediction:.0f}")
+    result_two.metric("Target time", target_time.strftime("%a %d %b, %H:%M"))
+    result_three.metric("Versus recent average", f"{expected_change:+.1%}")
+
+    if forecast.p10 is not None:
+        interval_frame = pd.DataFrame({
+            "estimate": ["P10 conservative", "P50 central", "P90 high demand"],
+            "pickups": [forecast.p10, forecast.p50, forecast.p90],
+        })
+        st.plotly_chart(
+            px.bar(
+                interval_frame,
+                x="estimate",
+                y="pickups",
+                color="estimate",
+                text_auto=".0f",
+                labels={"estimate": "Planning scenario", "pickups": "Expected hourly pickups"},
+            ),
+            width="stretch",
+        )
+        st.info(
+            f"For risk aware allocation, plan around {forecast.p50:.0f} pickups under the central scenario "
+            f"and reserve capacity up to {forecast.p90:.0f} pickups under the high demand scenario."
+        )
+    elif horizon_input == 24:
+        st.warning(
+            "The experiment found that the weekly seasonal baseline is slightly more accurate at this horizon. "
+            "This value is the LightGBM scenario forecast and should be compared with the same target hour last week before operational use."
+        )
+    else:
+        st.info("This horizon provides a point forecast. Probability intervals are currently calibrated for the one hour horizon.")
 
 st.subheader("Performance by forecast horizon")
 metric_choice = st.selectbox("Metric", ["rmse", "mae", "wmape", "peak_rmse"], index=0)

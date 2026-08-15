@@ -54,9 +54,11 @@ def predict_request(request: ForecastRequest) -> ForecastResponse:
     prediction = max(0.0, float(load_booster(f"lightgbm_h{request.horizon_hours}.txt").predict(frame)[0]))
     response = ForecastResponse(horizon_hours=request.horizon_hours, prediction=prediction)
     if request.horizon_hours == 1:
-        response.p10 = max(0.0, float(load_booster("lightgbm_h1_q10.txt").predict(frame)[0]))
-        response.p50 = max(0.0, float(load_booster("lightgbm_h1_q50.txt").predict(frame)[0]))
-        response.p90 = max(0.0, float(load_booster("lightgbm_h1_q90.txt").predict(frame)[0]))
+        quantiles = sorted(
+            max(0.0, float(load_booster(f"lightgbm_h1_q{level}.txt").predict(frame)[0]))
+            for level in (10, 50, 90)
+        )
+        response.p10, response.p50, response.p90 = quantiles
     return response
 
 

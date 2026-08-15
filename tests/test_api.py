@@ -22,7 +22,7 @@ def test_request_rejects_invalid_hour():
 def test_prediction_returns_interval_for_one_hour():
     response = predict_request(valid_request())
     assert response.prediction >= 0
-    assert 0 <= response.p10 <= response.p90
+    assert 0 <= response.p10 <= response.p50 <= response.p90
 
 
 def test_prediction_rejects_unsupported_horizon():
