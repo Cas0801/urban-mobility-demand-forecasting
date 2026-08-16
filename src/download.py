@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from urllib.request import urlretrieve
+import shutil
+import time
+from urllib.request import Request, urlopen
 
 
 BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data"
@@ -17,7 +19,20 @@ def download_month(year: int, month: int, output_dir: Path) -> Path:
     if destination.exists() and destination.stat().st_size > 0:
         print(f"Using existing {destination}")
         return destination
-    urlretrieve(f"{BASE_URL}/{filename}", destination)
+    partial = destination.with_suffix(".parquet.part")
+    request = Request(f"{BASE_URL}/{filename}", headers={"User-Agent": "urban-mobility-research/1.0"})
+    for attempt in range(1, 4):
+        try:
+            with urlopen(request, timeout=120) as response, partial.open("wb") as output:
+                shutil.copyfileobj(response, output, length=1024 * 1024)
+            partial.replace(destination)
+            break
+        except Exception:
+            partial.unlink(missing_ok=True)
+            if attempt == 3:
+                raise
+            print(f"Retrying {filename} after attempt {attempt}")
+            time.sleep(2 ** attempt)
     print(f"Downloaded {destination}")
     return destination
 

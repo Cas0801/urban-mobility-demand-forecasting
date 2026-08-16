@@ -29,9 +29,9 @@ def temporal_split(data: pd.DataFrame, validation_days: int = 14, test_days: int
     )
 
 
-def new_model(objective: str = "poisson", alpha: float | None = None):
+def new_model(objective: str = "poisson", alpha: float | None = None, n_estimators: int = 700):
     parameters = dict(
-        objective=objective, n_estimators=700, learning_rate=0.04,
+        objective=objective, n_estimators=n_estimators, learning_rate=0.04,
         num_leaves=63, min_child_samples=50, subsample=0.9,
         colsample_bytree=0.9, random_state=42, n_jobs=4,
         verbosity=-1, force_row_wise=True,
@@ -65,12 +65,24 @@ def make_reference_profile(data: pd.DataFrame, bins: int = 10) -> dict:
 
 
 def run(input_path: Path, artifacts: Path, horizons=HORIZONS) -> pd.DataFrame:
-    featured = build_features(pd.read_parquet(input_path))
+    hourly = pd.read_parquet(input_path)
+    featured = build_features(hourly)
     artifacts.mkdir(parents=True, exist_ok=True)
     metric_rows = []
     sample_frames = []
     probabilistic_summary = {}
-    metadata = {"features": FEATURE_COLUMNS, "horizons": list(horizons), "runs": {}}
+    metadata = {
+        "features": FEATURE_COLUMNS,
+        "horizons": list(horizons),
+        "dataset": {
+            "zone_hour_rows": len(hourly),
+            "total_trips": int(hourly.demand.sum()),
+            "start": str(hourly.timestamp.min()),
+            "end": str(hourly.timestamp.max()),
+            "zones": int(hourly.zone_id.nunique()),
+        },
+        "runs": {},
+    }
 
     for horizon in horizons:
         supervised = make_supervised(featured, horizon)

@@ -1,0 +1,23 @@
+{
+  "1": {
+    "folds": 3,
+    "rmse_mean": 12.393298292476105,
+    "rmse_std": 1.276866265635533,
+    "improvement_mean": 0.31172708483116396,
+    "improved_folds": 3
+  },
+  "6": {
+    "folds": 3,
+    "rmse_mean": 13.15858056443823,
+    "rmse_std": 1.4972052276904564,
+    "improvement_mean": 0.2714266846113055,
+    "improved_folds": 3
+  },
+  "24": {
+    "folds": 3,
+    "rmse_mean": 14.242523444892507,
+    "rmse_std": 2.1039241752767737,
+    "improvement_mean": 0.21645617680548646,
+    "improved_folds": 3
+  }
+}

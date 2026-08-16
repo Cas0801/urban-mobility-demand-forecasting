@@ -1,11 +1,11 @@
 {
   "nominal_coverage": 0.8,
-  "empirical_coverage": 0.8108869501999273,
-  "mean_interval_width": 12.179433860448233,
+  "empirical_coverage": 0.8487122035125837,
+  "mean_interval_width": 11.931906333099088,
   "median_metrics": {
-    "rmse": 12.315669448418067,
-    "mae": 3.6643995665351605,
-    "wmape": 0.20310682993308563,
-    "peak_rmse": 36.20543020577185
+    "rmse": 13.634087650149473,
+    "mae": 4.158702457128048,
+    "wmape": 0.2645662068313435,
+    "peak_rmse": 41.746949036494584
   }
 }

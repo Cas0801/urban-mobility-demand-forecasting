@@ -9,6 +9,9 @@ def test_forecast_simulator_runs_default_scenario():
 
     assert not app.exception
     assert app.subheader[0].value == "Interactive demand forecast"
+    headline_metrics = {metric.label: metric.value for metric in app.metric}
+    assert headline_metrics["Raw trips"] == "41.17M"
+    assert "Backtest RMSE gain" in headline_metrics
 
     app.button[0].click().run()
 

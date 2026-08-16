@@ -18,6 +18,9 @@ metrics_path = Path("artifacts/metrics.csv")
 predictions_path = Path("artifacts/prediction_sample.csv")
 probability_path = Path("artifacts/probabilistic_metrics.json")
 interval_path = Path("artifacts/interval_sample.csv")
+metadata_path = Path("artifacts/metadata.json")
+backtest_path = Path("artifacts/backtest_metrics.csv")
+backtest_summary_path = Path("artifacts/backtest_summary.json")
 history_path = Path("data/processed/hourly_zone_demand.parquet")
 if not metrics_path.exists() or not predictions_path.exists():
     st.error("Run the preparation and training pipeline before opening the dashboard.")
@@ -26,16 +29,22 @@ if not metrics_path.exists() or not predictions_path.exists():
 metrics = pd.read_csv(metrics_path)
 predictions = pd.read_csv(predictions_path, parse_dates=["target_timestamp"])
 probability = json.loads(probability_path.read_text()) if probability_path.exists() else None
+metadata = json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
+backtest_summary = json.loads(backtest_summary_path.read_text()) if backtest_summary_path.exists() else {}
 hourly_history = pd.read_parquet(history_path) if history_path.exists() else None
 test_metrics = metrics[metrics.split.eq("test")].copy()
 one_hour = test_metrics[test_metrics.horizon_hours.eq(1)].set_index("model")
 improvement = 1 - one_hour.loc["lightgbm", "rmse"] / one_hour.loc["same_hour_last_week", "rmse"]
+dataset = metadata.get("dataset", {})
+trip_count = dataset.get("total_trips", 41_169_300)
+zone_hour_rows = dataset.get("zone_hour_rows", 2_310_192)
+backtest_improvement = backtest_summary.get("1", {}).get("improvement_mean", improvement)
 
 one, two, three, four = st.columns(4)
-one.metric("Raw trips", "9.55M", help="Official trip records across January to March 2024")
-two.metric("Zone hour rows", "572,208")
+one.metric("Raw trips", f"{trip_count / 1_000_000:.2f}M", help="Official trip records across all twelve months of 2024")
+two.metric("Zone hour rows", f"{zone_hour_rows:,}")
 three.metric("1 hour RMSE", f"{one_hour.loc['lightgbm', 'rmse']:.2f}")
-four.metric("RMSE improvement", f"{improvement:.1%}", help="Compared with the same hour last week")
+four.metric("Backtest RMSE gain", f"{backtest_improvement:.1%}", help="Mean improvement across three future test windows")
 
 st.subheader("Interactive demand forecast")
 st.write(
@@ -55,7 +64,7 @@ with st.form("forecast_simulator"):
     horizon_input = setup_one.selectbox("Forecast horizon", [1, 6, 24], format_func=lambda value: f"Next {value} hour" if value == 1 else f"Next {value} hours")
     zone_input = setup_two.number_input("NYC taxi zone", min_value=1, max_value=265, value=161, step=1)
     forecast_origin = datetime.combine(
-        setup_three.date_input("Forecast origin date", value=datetime(2024, 3, 29).date()),
+        setup_three.date_input("Forecast origin date", value=datetime(2024, 12, 29).date()),
         setup_three.time_input("Forecast origin time", value=datetime.strptime("18:00", "%H:%M").time()),
     )
 
@@ -139,9 +148,9 @@ if submitted:
             f"and reserve capacity up to {forecast.p90:.0f} pickups under the high demand scenario."
         )
     elif horizon_input == 24:
-        st.warning(
-            "The experiment found that the weekly seasonal baseline is slightly more accurate at this horizon. "
-            "This value is the LightGBM scenario forecast and should be compared with the same target hour last week before operational use."
+        st.info(
+            "The twenty four hour model improved RMSE in all three rolling test windows, with more variation than shorter horizons. "
+            "Use the result as a planning forecast and retain the weekly baseline as a production fallback."
         )
     else:
         st.info("This horizon provides a point forecast. Probability intervals are currently calibrated for the one hour horizon.")
@@ -153,7 +162,31 @@ figure = px.bar(
     labels={"horizon_hours": "Forecast horizon in hours", metric_choice: metric_choice.upper(), "model": "Model"},
 )
 st.plotly_chart(figure, width="stretch")
-st.info("LightGBM leads at one and six hours. At twenty four hours, the weekly seasonal baseline is slightly stronger. Model selection should therefore be specific to each forecast horizon.")
+st.info("With a full year of training data, LightGBM leads the weekly seasonal baseline at every horizon on the final test period.")
+
+if backtest_path.exists():
+    st.subheader("Rolling backtest stability")
+    backtest = pd.read_csv(backtest_path, parse_dates=["origin"])
+    model_backtest = backtest[backtest.model.eq("lightgbm")].copy()
+    stability_one, stability_two, stability_three = st.columns(3)
+    for column, horizon_value in zip((stability_one, stability_two, stability_three), (1, 6, 24)):
+        summary = backtest_summary[str(horizon_value)]
+        column.metric(
+            f"{horizon_value} hour mean gain",
+            f"{summary['improvement_mean']:.1%}",
+            help=f"LightGBM beat the weekly baseline in {summary['improved_folds']} of {summary['folds']} folds",
+        )
+    backtest_figure = px.line(
+        model_backtest,
+        x="origin",
+        y="rmse_improvement",
+        color="horizon_hours",
+        markers=True,
+        labels={"origin": "Future test window start", "rmse_improvement": "RMSE improvement", "horizon_hours": "Horizon"},
+    )
+    backtest_figure.update_yaxes(tickformat=".0%")
+    st.plotly_chart(backtest_figure, width="stretch")
+    st.caption("Each point trains on earlier observations, validates on the following fourteen days, and evaluates on a later twenty eight day window.")
 
 if probability and interval_path.exists():
     st.subheader("Probabilistic forecast")

@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: install data prepare train test dashboard api monitor pipeline container
+.PHONY: install data prepare train backtest test dashboard api monitor pipeline container
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -14,6 +14,9 @@ prepare:
 train:
 	$(PYTHON) -m src.train
 
+backtest:
+	$(PYTHON) -m src.backtest
+
 test:
 	$(PYTHON) -m pytest -q
 
@@ -26,7 +29,7 @@ api:
 monitor:
 	$(PYTHON) -m src.monitor
 
-pipeline: data prepare train test
+pipeline: data prepare train backtest test
 
 container:
 	docker build -t urban-mobility-forecasting .

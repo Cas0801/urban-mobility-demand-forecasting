@@ -40,16 +40,16 @@ FastAPI service   Streamlit dashboard   PSI monitoring
 
 ## Verified results
 
-The experiment processes 9.55 million trips from January through March 2024 into 572,208 zone and hour observations. The final fourteen days are kept as an untouched test period.
+The experiment processes 41.17 million trips across all twelve months of 2024 into 2,310,192 zone and hour observations. Three rolling backtests measure performance across separate future windows before the final fourteen day test.
 
 <table>
 <tr><th>Horizon</th><th>Weekly baseline RMSE</th><th>LightGBM RMSE</th><th>Relative change</th><th>Selected approach</th></tr>
-<tr><td>1 hour</td><td>12.82</td><td>11.17</td><td>12.85% better</td><td>LightGBM</td></tr>
-<tr><td>6 hours</td><td>12.82</td><td>12.35</td><td>3.66% better</td><td>LightGBM</td></tr>
-<tr><td>24 hours</td><td>12.82</td><td>12.94</td><td>0.99% worse</td><td>Weekly baseline</td></tr>
+<tr><td>1 hour</td><td>26.59</td><td>12.15</td><td>54.30% better</td><td>LightGBM</td></tr>
+<tr><td>6 hours</td><td>26.59</td><td>15.17</td><td>42.93% better</td><td>LightGBM</td></tr>
+<tr><td>24 hours</td><td>26.59</td><td>17.35</td><td>34.75% better</td><td>LightGBM</td></tr>
 </table>
 
-The eighty percent probability interval reaches 81.09% empirical coverage. The result also shows why model choice should depend on forecast horizon: recent demand signals help short term forecasts, while weekly seasonality remains more reliable at twenty four hours.
+Across three rolling future windows, mean RMSE improves by 31.17% at one hour, 27.14% at six hours, and 21.65% at twenty four hours. Every horizon beats the weekly baseline in all three folds. The eighty percent probability interval reaches 84.87% empirical coverage on the final test period.
 
 Detailed metrics and interpretation are available in [`RESULTS.md`](RESULTS.md).
 
@@ -105,8 +105,9 @@ The included container starts the Streamlit dashboard on port 8501.
 2. Validation and test windows occur strictly after training data.
 3. The test period is not used for feature selection or tuning.
 4. Every complex model is evaluated against a strong seasonal baseline.
-5. Automated tests cover zero demand aggregation, leakage controls, temporal ordering, horizon alignment, drift alerts, input validation, and inference.
-6. Continuous integration runs the complete test suite for every change to the main branch.
+5. Rolling origin evaluation measures model stability across multiple unseen future periods.
+6. Automated tests cover zero demand aggregation, leakage controls, temporal ordering, horizon alignment, drift alerts, input validation, and inference.
+7. Continuous integration runs the complete test suite for every change to the main branch.
 
 ## Repository guide
 
@@ -116,6 +117,8 @@ The included container starts the Streamlit dashboard on port 8501.
 <tr><td><code>src/prepare.py</code></td><td>Validation and hourly aggregation</td></tr>
 <tr><td><code>src/features.py</code></td><td>Leakage safe feature generation</td></tr>
 <tr><td><code>src/train.py</code></td><td>Training, evaluation, and artifact creation</td></tr>
+<tr><td><code>src/backtest.py</code></td><td>Rolling origin stability evaluation</td></tr>
+<tr><td><code>src/history.py</code></td><td>Automatic historical feature retrieval</td></tr>
 <tr><td><code>src/api.py</code></td><td>Online inference service</td></tr>
 <tr><td><code>src/monitor.py</code></td><td>PSI drift monitoring</td></tr>
 <tr><td><code>app.py</code></td><td>Interactive operations dashboard</td></tr>

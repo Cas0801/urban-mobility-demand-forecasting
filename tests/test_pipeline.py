@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from src.features import build_features, make_supervised
-from src.prepare import aggregate_hourly
+from src.prepare import aggregate_hourly, aggregate_paths
 from src.train import temporal_split
 from src.monitor import create_drift_report
 
@@ -24,6 +24,26 @@ def test_hourly_aggregation_keeps_zone_grid():
     result = aggregate_hourly(trips)
     assert len(result) == 4
     assert result.demand.sum() == 2
+
+
+def test_file_aggregation_combines_months_without_loading_all_trips(tmp_path):
+    january = pd.DataFrame({
+        "tpep_pickup_datetime": pd.to_datetime(["2024-01-31 23:10", "2024-01-31 23:20"]),
+        "PULocationID": [1, 1],
+    })
+    february = pd.DataFrame({
+        "tpep_pickup_datetime": pd.to_datetime(["2024-02-01 00:10"]),
+        "PULocationID": [1],
+    })
+    january_path = tmp_path / "yellow_tripdata_2024-01.parquet"
+    february_path = tmp_path / "yellow_tripdata_2024-02.parquet"
+    january.to_parquet(january_path, index=False)
+    february.to_parquet(february_path, index=False)
+
+    result = aggregate_paths([january_path, february_path])
+
+    assert result.demand.tolist() == [2, 1]
+    assert result.timestamp.tolist() == list(pd.date_range("2024-01-31 23:00", periods=2, freq="h"))
 
 
 def test_lag_features_use_only_past_values():

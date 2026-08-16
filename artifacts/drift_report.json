@@ -1,29 +1,29 @@
 {
   "status": "ok",
-  "rows": 44278,
+  "rows": 44447,
   "features": {
     "lag_1": {
-      "psi": 0.007575485787692404,
+      "psi": 0.006095550802572377,
       "missing_rate": 0.0,
       "status": "ok"
     },
     "lag_24": {
-      "psi": 0.007430511813730429,
+      "psi": 0.007035401009445889,
       "missing_rate": 0.0,
       "status": "ok"
     },
     "lag_168": {
-      "psi": 0.012470728648965854,
+      "psi": 0.005700274299316162,
       "missing_rate": 0.0,
       "status": "ok"
     },
     "rolling_mean_24": {
-      "psi": 0.04447611694470774,
+      "psi": 0.025179014539979252,
       "missing_rate": 0.0,
       "status": "ok"
     },
     "rolling_mean_168": {
-      "psi": 0.08210922664840241,
+      "psi": 0.039029240481991787,
       "missing_rate": 0.0,
       "status": "ok"
     }
